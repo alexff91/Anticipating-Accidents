@@ -106,7 +106,7 @@ def build_model():
         attention_list = tf.multiply(tf.expand_dims(alphas,2),n_object)
         attention = tf.reduce_sum(attention_list,0) # b x h
         # concat frame & object
-        fusion = tf.concat(1,[image,attention])
+        fusion = tf.concat([image,attention],1)
         # reuse variables
         if i > 0 :  tf.get_variable_scope().reuse_variables()       
         with tf.variable_scope("LSTM") as vs:
