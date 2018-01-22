@@ -127,9 +127,9 @@ def build_model():
             all_alphas = tf.concat(0,[all_alphas, temp_alphas])
 
         # positive example (exp_loss)
-        pos_loss = -tf.multiply(tf.exp(-(n_frames-i-1)/20.0),-tf.nn.softmax_cross_entropy_with_logits(pred, y))
+        pos_loss = -tf.multiply(tf.exp(-(n_frames-i-1)/20.0),-tf.nn.softmax_cross_entropy_with_logits(labels=pred, logits=y))
         # negative example
-        neg_loss = tf.nn.softmax_cross_entropy_with_logits(pred, y) # Softmax loss
+        neg_loss = tf.nn.softmax_cross_entropy_with_logits(labels=pred, logits=y) # Softmax loss
 
         temp_loss = tf.reduce_mean(tf.add(tf.multiply(pos_loss,y[:,1]),tf.multiply(neg_loss,y[:,0])))
         #loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(pred, y))
