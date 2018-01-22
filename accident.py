@@ -122,9 +122,9 @@ def build_model():
             all_alphas = tf.expand_dims(alphas,0)
         else:
             temp_soft_pred = tf.reshape(tf.gather(tf.transpose(tf.nn.softmax(pred),(1,0)),1),(batch_size,1))
-            soft_pred = tf.concat(1,[soft_pred,temp_soft_pred])
+            soft_pred = tf.concat([soft_pred,temp_soft_pred],1)
             temp_alphas = tf.expand_dims(alphas,0)
-            all_alphas = tf.concat(0,[all_alphas, temp_alphas])
+            all_alphas = tf.concat([all_alphas, temp_alphas],0)
 
         # positive example (exp_loss)
         pos_loss = -tf.multiply(tf.exp(-(n_frames-i-1)/20.0),-tf.nn.softmax_cross_entropy_with_logits(labels=pred, logits=y))
