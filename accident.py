@@ -1,9 +1,13 @@
 import cv2
 import tensorflow as tf
+
+vars_to_rename = {
+    "lstm/basic_lstm_cell/weights": "lstm/basic_lstm_cell/kernel",
+    "lstm/basic_lstm_cell/biases": "lstm/basic_lstm_cell/bias",
+}
 import argparse
 import numpy as np
 import os
-import pdb
 import time
 import matplotlib.pyplot as plt
 import sys
@@ -138,12 +142,13 @@ def build_model():
         neg_loss = tf.nn.softmax_cross_entropy_with_logits(labels=pred, logits=y)  # Softmax loss
 
         temp_loss = tf.reduce_mean(tf.add(tf.multiply(pos_loss, y[:, 1]), tf.multiply(neg_loss, y[:, 0])))
-        # loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(pred, y))
-        loss = tf.add(loss, temp_loss)
-
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=pred, logits=y))
+        # loss = tf.add(loss, temp_loss)
     # Define loss and optimizer
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-        # .minimize(loss / n_frames, gate_gradients=0,aggregation_method=0)  # Adam Optimizer
+    step = tf.Variable(0, trainable=False)
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss=loss, gate_gradients=0,
+                                                                             aggregation_method=0,
+                                                                             global_step=step)  # Adam Optimizer
 
     return x, keep, y, optimizer, loss, lstm_variables, soft_pred, all_alphas
 
