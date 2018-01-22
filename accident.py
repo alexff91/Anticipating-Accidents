@@ -98,10 +98,10 @@ def build_model():
 
         # object attention
         brcst_w = tf.tile(tf.expand_dims(weights['att_w'], 0), [n_detection-1,1,1]) # n x h x 1
-        image_part = tf.batch_matmul(n_object, tf.tile(tf.expand_dims(weights['att_ua'], 0), [n_detection-1,1,1])) + biases['att_ba'] # n x b x h
+        image_part = tf.matmul(n_object, tf.tile(tf.expand_dims(weights['att_ua'], 0), [n_detection-1,1,1])) + biases['att_ba'] # n x b x h
         e = tf.tanh(tf.matmul(h_prev,weights['att_wa'])+image_part) # n x b x h
         # the probability of each object
-        alphas = tf.multiply(tf.nn.softmax(tf.reduce_sum(tf.batch_matmul(e,brcst_w),2),0),zeros_object[i])
+        alphas = tf.multiply(tf.nn.softmax(tf.reduce_sum(tf.matmul(e,brcst_w),2),0),zeros_object[i])
         # weighting sum
         attention_list = tf.multiply(tf.expand_dims(alphas,2),n_object)
         attention = tf.reduce_sum(attention_list,0) # b x h
