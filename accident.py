@@ -57,7 +57,7 @@ def parse_args():
 
 def build_model():
     # tf Graph input
-    global soft_pred, all_alphas
+    global soft_pred, all_alphas, lstm_variables
     x = tf.placeholder("float", [None, n_frames, n_detection, n_input])
     y = tf.placeholder("float", [None, n_classes])
     keep = tf.placeholder("float", [None])
@@ -117,8 +117,8 @@ def build_model():
         # concat frame & object
         fusion = tf.concat([image, attention], 1)
         # reuse variables
-        if i > 0:  tf.get_variable_scope().reuse_variables()
-        with tf.variable_scope("LSTM") as vs:
+        # if i > 0:  tf.get_variable_scope().reuse_variables()
+        with tf.variable_scope("LSTM", reuse=tf.AUTO_REUSE) as vs:
             outputs, istate = lstm_cell_dropout(fusion, istate)
             lstm_variables = [v for v in tf.global_variables() if v.name.startswith(vs.name)]
         # save prev hidden state of LSTM
@@ -137,19 +137,15 @@ def build_model():
 
         # positive example (exp_loss)
         pos_loss = -tf.multiply(tf.exp(-(n_frames - i - 1) / 20.0),
-                                -tf.nn.softmax_cross_entropy_with_logits(labels=pred, logits=y))
+                                -tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=pred))
         # negative example
-        neg_loss = tf.nn.softmax_cross_entropy_with_logits(labels=pred, logits=y)  # Softmax loss
+        neg_loss = tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=pred)  # Softmax loss
 
         temp_loss = tf.reduce_mean(tf.add(tf.multiply(pos_loss, y[:, 1]), tf.multiply(neg_loss, y[:, 0])))
-        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=pred, logits=y))
-        # loss = tf.add(loss, temp_loss)
+        # loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=pred, logits=y))
+        loss = tf.add(loss, temp_loss)
     # Define loss and optimizer
-    step = tf.Variable(0, trainable=False)
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss=loss, gate_gradients=0,
-                                                                             aggregation_method=0,
-                                                                             global_step=step)  # Adam Optimizer
-
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss=loss)  # Adam Optimizer
     return x, keep, y, optimizer, loss, lstm_variables, soft_pred, all_alphas
 
 
