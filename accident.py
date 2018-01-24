@@ -216,7 +216,7 @@ def test_all(sess, num, path, x, keep, y, loss, lstm_variables, soft_pred):
     evaluation(all_pred, all_labels)
 
 
-def evaluation(all_pred, all_labels, total_time=90, vis=False, length=None):
+def evaluation(all_pred, all_labels, total_time=90, vis=True, length=None):
     ### input: all_pred (N x total_time) , all_label (N,)
     ### where N = number of videos, fps = 20 , time of accident = total_time
     ### output: AP & Time to Accident
