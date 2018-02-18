@@ -1,10 +1,5 @@
 import cv2
 import tensorflow as tf
-
-vars_to_rename = {
-    "lstm/basic_lstm_cell/weights": "lstm/basic_lstm_cell/kernel",
-    "lstm/basic_lstm_cell/biases": "lstm/basic_lstm_cell/bias",
-}
 import argparse
 import numpy as np
 import os
@@ -12,12 +7,18 @@ import time
 import matplotlib.pyplot as plt
 import sys
 
+vars_to_rename = {
+    "lstm/basic_lstm_cell/weights": "lstm/basic_lstm_cell/kernel",
+    "lstm/basic_lstm_cell/biases": "lstm/basic_lstm_cell/bias",
+}
+
 ############### Global Parameters ###############
 # path
 train_path = './dataset/features/training/'
 test_path = './dataset/features/testing/'
 demo_path = './dataset/features/testing/'
 default_model_path = './model/demo_model'
+final_model_path = './model/final_model'
 save_path = './model/'
 video_path = './dataset/videos/training/positive/'
 # batch_number
@@ -145,7 +146,7 @@ def build_model():
         # loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=pred, logits=y))
         loss = tf.add(loss, temp_loss)
     # Define loss and optimizer
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss=loss)  # Adam Optimizer
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(loss=loss)  # Adam Optimizer
     return x, keep, y, optimizer, loss, lstm_variables, soft_pred, all_alphas
 
 
@@ -268,7 +269,7 @@ def evaluation(all_pred, all_labels, total_time=90, vis=True, length=None):
     Precision = Precision[new_index]
     Recall = Recall[new_index]
     Time = Time[new_index]
-    _, rep_index = np.unique(Recall, return_index=1)
+    _, rep_index = np.unique(Recall, True)
     new_Time = np.zeros(len(rep_index))
     new_Precision = np.zeros(len(rep_index))
     for i in range(len(rep_index) - 1):
@@ -287,29 +288,33 @@ def evaluation(all_pred, all_labels, total_time=90, vis=True, length=None):
     for i in range(1, len(new_Precision)):
         AP += (new_Precision[i - 1] + new_Precision[i]) * (new_Recall[i] - new_Recall[i - 1]) / 2
 
-    print("Average Precision= " + "{:.4f}".format(AP) + " ,mean Time to accident= " + "{:.4}".format(
+    print("Средняя точность = " + "{:.4f}".format(AP) + " , среднее время до аварии= " + "{:.4}".format(
         np.mean(new_Time) * 5))
     sort_time = new_Time[np.argsort(new_Recall)]
     sort_recall = np.sort(new_Recall)
-    print("Recall@80%, Time to accident= " + "{:.4}".format(sort_time[np.argmin(np.abs(sort_recall - 0.8))] * 5))
+    print("Полнота (80%), Время до аварии= " + "{:.4}".format(sort_time[np.argmin(np.abs(sort_recall - 0.8))] * 5))
 
     ### visualize
 
     if vis:
-        plt.plot(new_Recall, new_Precision, label='Precision-Recall curve')
-        plt.xlabel('Recall')
-        plt.ylabel('Precision')
+        print(new_Recall)
+        print(new_Precision)
+        print(AP)
+        print(new_Time)
+        plt.plot(new_Recall, new_Precision, label='Кривая ошибок (ROC curve)') #Precision-Recall curve
+        plt.xlabel('Полнота')#Recall
+        plt.ylabel('Точность')#Precision
         plt.ylim([0.0, 1.05])
         plt.xlim([0.0, 1.0])
-        plt.title('Precision-Recall example: AUC={0:0.2f}'.format(AP))
+        plt.title('Precision-Recall example:  площадь (Area Under Curve) под кривой ошибок={0:0.2f}'.format(AP))
         plt.show()
         plt.clf()
-        plt.plot(new_Recall, new_Time, label='Recall-mean_time curve')
-        plt.xlabel('Recall')
-        plt.ylabel('time')
+        plt.plot(new_Recall, new_Time, label='Отношение полноты к среднему времени до аварии')
+        plt.xlabel('Полнота')
+        plt.ylabel('Время')
         plt.ylim([0.0, 5])
         plt.xlim([0.0, 1.0])
-        plt.title('Recall-mean_time')
+        plt.title('Полнота\Среднее время до аварии')
         plt.show()
 
 
@@ -339,8 +344,8 @@ def vis(model_path):
                 plt.figure(figsize=(14, 5))
                 plt.plot(pred[i, 0:90], linewidth=3.0)
                 plt.ylim(0, 1)
-                plt.ylabel('Probability')
-                plt.xlabel('Frame')
+                plt.ylabel('Вероятность')
+                plt.xlabel('Фрейм')
                 plt.show()
                 file_name = ID[i]
                 bboxes = det[i]
@@ -384,12 +389,14 @@ def test(model_path):
     # load model
     x, keep, y, optimizer, loss, lstm_variables, soft_pred, all_alphas = build_model()
     # inistal Session
-    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.3)
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5)
     sess = tf.InteractiveSession(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options))
     init = tf.global_variables_initializer()
     sess.run(init)
     saver = tf.train.Saver()
     saver.restore(sess, model_path)
+    tf.train.write_graph(tf.get_default_graph(), final_model_path,
+                         'accidents.pb', as_text=False)
     print("model restore!!!")
     print("Training")
     test_all(sess, train_num, train_path, x, keep, y, loss, lstm_variables, soft_pred)
