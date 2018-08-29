@@ -16,7 +16,7 @@ vars_to_rename = {
 # path
 train_path = './dataset/features/training/'
 test_path = './dataset/features/testing/'
-demo_path = './dataset/features/testing/'
+demo_path = './dataset/features/training/'
 default_model_path = './model/demo_model'
 final_model_path = './model/final_model'
 save_path = './model/'
@@ -59,24 +59,24 @@ def parse_args():
 def build_model():
     # tf Graph input
     global soft_pred, all_alphas, lstm_variables
-    x = tf.placeholder("float", [None, n_frames, n_detection, n_input])
-    y = tf.placeholder("float", [None, n_classes])
-    keep = tf.placeholder("float", [None])
+    x = tf.placeholder("float", [None, n_frames, n_detection, n_input], name="x")
+    y = tf.placeholder("float", [None, n_classes], name="y")
+    keep = tf.placeholder("float", [None], name="keep")
 
     # Define weights
     weights = {
-        'em_obj': tf.Variable(tf.random_normal([n_input, n_att_hidden], mean=0.0, stddev=0.01)),
-        'em_img': tf.Variable(tf.random_normal([n_input, n_img_hidden], mean=0.0, stddev=0.01)),
-        'att_w': tf.Variable(tf.random_normal([n_att_hidden, 1], mean=0.0, stddev=0.01)),
-        'att_wa': tf.Variable(tf.random_normal([n_hidden, n_att_hidden], mean=0.0, stddev=0.01)),
-        'att_ua': tf.Variable(tf.random_normal([n_att_hidden, n_att_hidden], mean=0.0, stddev=0.01)),
-        'out': tf.Variable(tf.random_normal([n_hidden, n_classes], mean=0.0, stddev=0.01))
+        'em_obj': tf.Variable(tf.random_normal([n_input, n_att_hidden], mean=0.0, stddev=0.01), name="w_em_obj"),
+        'em_img': tf.Variable(tf.random_normal([n_input, n_img_hidden], mean=0.0, stddev=0.01), name="w_em_img"),
+        'att_w': tf.Variable(tf.random_normal([n_att_hidden, 1], mean=0.0, stddev=0.01), name="w_att_w"),
+        'att_wa': tf.Variable(tf.random_normal([n_hidden, n_att_hidden], mean=0.0, stddev=0.01), name="w_att_wa"),
+        'att_ua': tf.Variable(tf.random_normal([n_att_hidden, n_att_hidden], mean=0.0, stddev=0.01), name="w_att_ua"),
+        'out': tf.Variable(tf.random_normal([n_hidden, n_classes], mean=0.0, stddev=0.01), name="w_out")
     }
     biases = {
-        'em_obj': tf.Variable(tf.random_normal([n_att_hidden], mean=0.0, stddev=0.01)),
-        'em_img': tf.Variable(tf.random_normal([n_img_hidden], mean=0.0, stddev=0.01)),
-        'att_ba': tf.Variable(tf.zeros([n_att_hidden])),
-        'out': tf.Variable(tf.random_normal([n_classes], mean=0.0, stddev=0.01))
+        'em_obj': tf.Variable(tf.random_normal([n_att_hidden], mean=0.0, stddev=0.01), name="b_em_obj"),
+        'em_img': tf.Variable(tf.random_normal([n_img_hidden], mean=0.0, stddev=0.01), name="b_em_img"),
+        'att_ba': tf.Variable(tf.zeros([n_att_hidden]), name="b_att_ba"),
+        'out': tf.Variable(tf.random_normal([n_classes], mean=0.0, stddev=0.01), name="b_out")
     }
 
     # Define a lstm cell with tensorflow
@@ -141,12 +141,13 @@ def build_model():
                                 -tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=pred))
         # negative example
         neg_loss = tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=pred)  # Softmax loss
-
-        temp_loss = tf.reduce_mean(tf.add(tf.multiply(pos_loss, y[:, 1]), tf.multiply(neg_loss, y[:, 0])))
+        with tf.name_scope("accuracy"):
+            temp_loss = tf.reduce_mean(tf.add(tf.multiply(pos_loss, y[:, 1]), tf.multiply(neg_loss, y[:, 0])))
         # loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=pred, logits=y))
         loss = tf.add(loss, temp_loss)
     # Define loss and optimizer
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(loss=loss)  # Adam Optimizer
+    with tf.name_scope("train"):
+        optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(loss=loss)  # Adam Optimizer
     return x, keep, y, optimizer, loss, lstm_variables, soft_pred, all_alphas
 
 
@@ -156,7 +157,7 @@ def train():
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.2)
     sess = tf.InteractiveSession(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options))
     # mkdir folder for saving model
-    if os.path.isdir(save_path) == False:
+    if not os.path.isdir(save_path):
         os.mkdir(save_path)
     # Initializing the variables
     init = tf.global_variables_initializer()
@@ -301,9 +302,9 @@ def evaluation(all_pred, all_labels, total_time=90, vis=True, length=None):
         print(new_Precision)
         print(AP)
         print(new_Time)
-        plt.plot(new_Recall, new_Precision, label='Кривая ошибок (ROC curve)') #Precision-Recall curve
-        plt.xlabel('Полнота')#Recall
-        plt.ylabel('Точность')#Precision
+        plt.plot(new_Recall, new_Precision, label='Кривая ошибок (ROC curve)')  # Precision-Recall curve
+        plt.xlabel('Полнота')  # Recall
+        plt.ylabel('Точность')  # Precision
         plt.ylim([0.0, 1.05])
         plt.xlim([0.0, 1.0])
         plt.title('Precision-Recall example:  площадь (Area Under Curve) под кривой ошибок={0:0.2f}'.format(AP))
@@ -344,14 +345,16 @@ def vis(model_path):
                 plt.figure(figsize=(14, 5))
                 plt.plot(pred[i, 0:90], linewidth=3.0)
                 plt.ylim(0, 1)
-                plt.ylabel('Вероятность')
-                plt.xlabel('Фрейм')
+                plt.ylabel('Вероятность аварии')
+                plt.xlabel('Номер кадра')
                 plt.show()
                 file_name = ID[i]
                 bboxes = det[i]
                 new_weight = weight[:, :, i] * 255
                 counter = 0
-                cap = cv2.VideoCapture(video_path + file_name + '.mp4')
+                name__mp_ = video_path + file_name.decode("utf-8") + '.mp4'
+                print(name__mp_)
+                cap = cv2.VideoCapture(name__mp_)
                 ret, frame = cap.read()
                 while (ret):
                     attention_frame = np.zeros((frame.shape[0], frame.shape[1]), dtype=np.uint8)
@@ -368,7 +371,7 @@ def vis(model_path):
                         font = cv2.FONT_HERSHEY_SIMPLEX
                         cv2.putText(frame, str(round(now_weight[num_box] / 255.0 * 10000) / 10000),
                                     (new_bboxes[num_box, 0], new_bboxes[num_box, 1]), font, 0.5, (0, 0, 255), 1,
-                                    cv2.CV_AA)
+                                    cv2.CV_8U)
                         attention_frame[int(new_bboxes[num_box, 1]):int(new_bboxes[num_box, 3]),
                         int(new_bboxes[num_box, 0]):int(new_bboxes[num_box, 2])] = now_weight[num_box]
 
@@ -395,6 +398,7 @@ def test(model_path):
     sess.run(init)
     saver = tf.train.Saver()
     saver.restore(sess, model_path)
+    tf.summary.FileWriter('C:/Users/Aleksandr.Fedorov/PycharmProjects/Anticipating-Accidents/vis/1', sess.graph)
     tf.train.write_graph(tf.get_default_graph(), final_model_path,
                          'accidents.pb', as_text=False)
     print("model restore!!!")
